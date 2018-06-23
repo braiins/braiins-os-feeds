@@ -1,0 +1,21 @@
+--- a/drivers/mtd/nand/zynq_nand.c
++++ b/drivers/mtd/nand/zynq_nand.c
+@@ -1264,3 +1264,18 @@ void board_nand_init(void)
+ 	if (zynq_nand_init(nand, 0))
+ 		puts("ZYNQ NAND init failed\n");
+ }
++
++#ifdef CONFIG_SPL_BUILD
++int nand_spl_load_image(uint32_t offs, unsigned int size, void *dst)
++{
++	return 0;
++}
++
++void nand_init(void)
++{
++}
++
++void nand_deselect(void)
++{
++}
++#endif /* CONFIG_SPL_BUILD */

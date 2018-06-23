@@ -1,0 +1,3 @@
+config FIRMWARE_VERSION
+    string "Firmware version"
+    default ""

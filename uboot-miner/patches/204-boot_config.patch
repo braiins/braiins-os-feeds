@@ -1,0 +1,127 @@
+--- a/include/configs/zynq-common.h
++++ b/include/configs/zynq-common.h
+@@ -170,6 +170,10 @@
+ # define CONFIG_SYS_NAND_SELF_INIT
+ # define CONFIG_SYS_NAND_ONFI_DETECTION
+ # define CONFIG_MTD_DEVICE
++# define CONFIG_SPL_NAND_SUPPORT
++# define CONFIG_SPL_NAND_DRIVERS
++# define CONFIG_SPL_NAND_BOOT
++# define CONFIG_SYS_NAND_U_BOOT_OFFS	0x00080000
+ #endif
+ 
+ #if defined(CONFIG_ZYNQ_I2C0) || defined(CONFIG_ZYNQ_I2C1)
+@@ -216,35 +220,84 @@
+ # endif
+ 
+ # define CONFIG_ENV_SECT_SIZE		CONFIG_ENV_SIZE
+-# define CONFIG_ENV_OFFSET		0xE0000
++# define CONFIG_ENV_OFFSET		0x400000
+ #endif
+ 
++/* MTD parts support */
++#define CONFIG_CMD_MTDPARTS
++#define CONFIG_MTD_DEVICE
++#define CONFIG_MTD_PARTITIONS
++#define MTDIDS_DEFAULT \
++	"nand0=pl35x-nand"
++#define MTDPARTS_DEFAULT \
++	"mtdparts=pl35x-nand:" \
++		"512k(boot)," \
++		"1536k(uboot)," \
++		"2m(system)," \
++		"512k(uboot_env)," \
++		"512k(miner_cfg)," \
++		"15m(recovery)," \
++		"100m(firmware1)," \
++		"100m(firmware2)"
++
++/* UBI support */
++#define CONFIG_CMD_UBI
++#define CONFIG_CMD_UBIFS
++#define CONFIG_RBTREE
++#define CONFIG_LZO
++
+ /* Default environment */
+-#define CONFIG_EXTRA_ENV_SETTINGS	\
+-	"fit_image=fit.itb\0"		\
+-	"load_addr=0x2000000\0"		\
+-	"fit_size=0x800000\0"		\
+-	"flash_off=0x100000\0"		\
+-	"nor_flash_off=0xE2100000\0"	\
+-	"fdt_high=0x20000000\0"		\
+-	"initrd_high=0x20000000\0"	\
+-	"norboot=echo Copying FIT from NOR flash to RAM... && " \
+-		"cp.b ${nor_flash_off} ${load_addr} ${fit_size} && " \
++#define CONFIG_EXTRA_ENV_SETTINGS \
++	"firmware=1\0" \
++	"load_addr=0x2000000\0" \
++	"miner_cfg_size=0x10000\0" \
++	"select_firmware=" \
++		"if test $firmware = 1; then " \
++			"setenv firmware_name firmware1 && " \
++			"setenv firmware_mtd 6; " \
++		"else " \
++			"setenv firmware_name firmware2 && " \
++			"setenv firmware_mtd 7; " \
++		"fi\0" \
++	"nandboot_init=echo Reseting miner configuration... && " \
++		"env default -a && " \
++		"nand read ${load_addr} miner_cfg ${miner_cfg_size} && " \
++		"env import -c ${load_addr} ${miner_cfg_size} && " \
++		"env set nandboot \"${nandboot_default}\" && " \
++		"env delete nandboot_init nandboot_default && " \
++		"saveenv && " \
++		"reset\0" \
++	"nandboot_default=echo Copying FIT from NAND flash to RAM... && " \
++		"run select_firmware && " \
++		"setenv bootargs console=ttyPS0,115200 noinitrd ubi.mtd=${firmware_mtd} ubi.block=0,1 root=/dev/ubiblock0_1 r rootfstype=squashfs rootwait ${mtdparts} earlyprintk && " \
++		"ubi part ${firmware_name} && " \
++		"ubi read ${load_addr} kernel && " \
+ 		"bootm ${load_addr}\0" \
++	"nandboot=run nandboot_init\0" \
++	"fit_image=fit.itb\0" \
++	"fpga_image=system.bit\0" \
++	"bootenv=uEnv.txt\0" \
++	"load_bootenv=load mmc 0 ${load_addr} ${bootenv}\0" \
+ 	"sdboot=echo Copying FIT from SD to RAM... && " \
++		"setenv bootargs console=ttyPS0,115200 root=/dev/ram0 r rootfstype=squashfs ${mtdparts} earlyprintk && " \
++		"if run load_bootenv; then " \
++			"echo Loaded environment from ${bootenv} && " \
++			"env import -t ${load_addr} ${filesize}; " \
++		"fi; " \
++		"if test -n ${uenvcmd}; then " \
++			"echo Running uenvcmd... && " \
++			"run uenvcmd; " \
++		"fi; " \
++		"load mmc 0 ${load_addr} ${fpga_image} && " \
++		"fpga loadb 0 ${load_addr} ${filesize} && " \
+ 		"load mmc 0 ${load_addr} ${fit_image} && " \
+ 		"bootm ${load_addr}\0" \
+-	"jtagboot=echo TFTPing FIT to RAM... && " \
+-		"tftpboot ${load_addr} ${fit_image} && " \
+-		"bootm ${load_addr}\0" \
+-	"usbboot=if usb start; then " \
+-			"echo Copying FIT from USB to RAM... && " \
+-			"load usb 0 ${load_addr} ${fit_image} && " \
+-			"bootm ${load_addr}; fi\0" \
+-		DFU_ALT_INFO
++	"mtdids=" MTDIDS_DEFAULT "\0" \
++	"mtdparts=" MTDPARTS_DEFAULT "\0" \
++	DFU_ALT_INFO
+ 
+ #define CONFIG_BOOTCOMMAND		"run $modeboot"
+-#define CONFIG_BOOTDELAY		3 /* -1 to Disable autoboot */
++#define CONFIG_BOOTDELAY		1 /* -1 to Disable autoboot */
+ #define CONFIG_SYS_LOAD_ADDR		0 /* default? */
+ 
+ /* Miscellaneous configurable options */
+@@ -366,7 +419,7 @@
+ #endif
+ 
+ /* for booting directly linux */
+-#define CONFIG_SPL_OS_BOOT
++/* #define CONFIG_SPL_OS_BOOT */
+ 
+ /* SP location before relocation, must use scratch RAM */
+ #define CONFIG_SPL_TEXT_BASE	0x0

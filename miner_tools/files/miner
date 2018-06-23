@@ -1,0 +1,77 @@
+#!/bin/sh
+
+# immediately exit when error occurs
+set -e
+
+usage() {
+	echo "usage: miner [-h] {factory_reset,run_recovery,fault_light} ..."
+	echo
+	echo "positional arguments:"
+	echo "  {factory_reset,run_recovery,fault_light}"
+	echo "    factory_reset       reboot and initiate factory reset"
+	echo "    run_recovery        reboot to recovery mode"
+	echo "    fault_light         turn on or off miner's fault LED"
+	echo
+	echo "optional arguments:"
+	echo "  -h, --help            show this help message and exit"
+}
+
+factory_reset() {
+	if [ $# -gt 0 ]; then
+		echo "command 'factory_reset' does not take any argument"
+		exit 1
+	fi
+	# erase U-Boot environment
+	mtd erase uboot_env
+	# U-Boot load default environment which initiate factory reset
+	reboot
+}
+
+run_recovery() {
+	if [ $# -gt 0 ]; then
+		echo "command 'run_recovery' does not take any argument"
+		exit 1
+	fi
+	# check if uboot_env partition is not corrupted
+	if [ -n "$(fw_printenv 2>&1 >/dev/null)" ]; then
+		echo "U-Boot environment is corrupted and recovery mode cannot be run"
+		echo "Factory reset can fix this issue"
+		exit 1
+	fi
+	# set 'recovery' variable in U-Boot environment
+	fw_setenv recovery yes
+	# U-Boot boot from different partition whet variable 'recovery' is set
+	reboot
+}
+
+fault_light() {
+	if [ $# -ne 1 -o \( "$1" != 'on' -a "$1" != 'off' \) ]; then
+		echo "command 'fault_light' takes only one argument [on|off]"
+		exit 1
+	fi
+	# send 'on' or 'off' to cgminer_monitor
+	echo $1 | nc localhost 4029 >/dev/null
+}
+
+# check number of arguments
+if [ $# -lt 1 ]; then
+	echo "missing command argument"
+	exit 1
+fi
+
+# try to find command
+command="$1"
+
+case $command in
+	factory_reset|run_recovery|fault_light)
+		shift
+		$command "$@"
+	;;
+	-h|--help)
+		usage
+	;;
+	*)  # unknown command
+		echo "unknown command '$command'"
+		exit 1
+	;;
+esac

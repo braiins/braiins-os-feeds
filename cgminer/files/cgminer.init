@@ -1,0 +1,58 @@
+#!/bin/sh /etc/rc.common
+
+START=99
+
+USE_PROCD=1
+PROG=/usr/bin/cgminer
+CONF=/etc/cgminer.conf
+
+boot()
+{
+	if [ ! -f "$CONF" ]; then
+		# get default pool configuration from U-Boot env
+		local pool_host=$(fw_printenv -n miner_pool_host 2>/dev/null)
+		local pool_port=$(fw_printenv -n miner_pool_port 2>/dev/null)
+		local pool_user=$(fw_printenv -n miner_pool_user 2>/dev/null)
+		local pool_pass=$(fw_printenv -n miner_pool_pass 2>/dev/null)
+
+		cat > "$CONF" <<END
+{
+	"pools" : [
+		{
+			"url" : "${pool_host:-stratum+tcp://stratum.slushpool.com}:${pool_port:-3333}",
+			"user" : "${pool_user:-braiinstest.worker1}",
+			"pass" : "${pool_pass}"
+		}
+	],
+	"api-allow" : "W:0/0",
+	"api-listen" : true,
+	"api-port" : "4028",
+	"A1Pll1" : "1332",
+	"A1Pll2" : "1332",
+	"A1Pll3" : "1332",
+	"A1Pll4" : "1332",
+	"A1Pll5" : "1332",
+	"A1Pll6" : "1332",
+	"A1Vol" : "10",
+	"enabled-chains" : "0,1,2"
+}
+END
+	fi
+	start "$@"
+}
+
+start_service()
+{
+	procd_open_instance
+	procd_set_param command "$PROG" -c "$CONF"
+	procd_set_param respawn 3600 5 0
+	procd_set_param stdout 0
+	procd_set_param stderr 1
+	procd_close_instance
+}
+
+reload_service()
+{
+	stop
+	start
+}

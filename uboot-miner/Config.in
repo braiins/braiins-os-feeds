@@ -1,0 +1,3 @@
+config EXTERNAL_UBOOT_TREE
+    string "Use external Zynq Miner U-Boot tree" if DEVEL
+    default ""

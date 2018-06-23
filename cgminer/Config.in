@@ -1,0 +1,3 @@
+config EXTERNAL_CGMINER_TREE
+    string "Use external CGMiner tree" if DEVEL
+    default ""

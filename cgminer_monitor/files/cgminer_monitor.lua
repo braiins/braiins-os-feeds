@@ -378,6 +378,8 @@ while true do
 
 	if monitor:sample_time() then
 		local cgminer = assert(SOCKET.tcp())
+		local new_state = 'dead'
+		cgminer:settimeout(3)
 		local ret, err = cgminer:connect(CGMINER_HOST, CGMINER_PORT)
 		if ret then
 			cgminer:send('{ "command":"devs" }')
@@ -386,17 +388,17 @@ while true do
 			if result then
 				-- remove null from string
 				result = result:sub(1, -2)
+
+				monitor:add_sample(result)
+				-- check if miner is running ok
+				if monitor:check_healthy() then
+					new_state = 'ok'
+				else
+					new_state = 'sick'
+				end
 			end
-			monitor:add_sample(result)
-			-- check if miner is running ok
-			if monitor:check_healthy() then
-				monitor:set_state('ok')
-			else
-				monitor:set_state('sick')
-			end
-		else
-			monitor:set_state('dead')
 		end
+		monitor:set_state(new_state)
 	end
 	if client then
 		local response = monitor:get_response(history)

@@ -324,7 +324,36 @@ local state_to_led = {
 	sick = 'blink-slow',
 }
 
+local function write_to_file(path, fmt, ...)
+	local f = io.open(path, 'w')
+	if not f then
+		print('cannot open '..path)
+		return
+	end
+	f:write(fmt:format(...))
+	f:close()
+end
+
+local function fan_set_duty(n, duty)
+	local prefix = ('/sys/class/pwm/pwmchip%d'):format(n)
+	local period = 100000
+	write_to_file(prefix..'/export', '0')
+	write_to_file(prefix..'/pwm0/period', '%d', period)
+	write_to_file(prefix..'/pwm0/duty_cycle', '%d', math.floor((100 - duty)*period))
+	write_to_file(prefix..'/pwm0/enable', '1')
+end
+
+local function safety_turn_all_fans_on()
+	print('turning all fans on')
+	for i = 0, 2 do
+		fan_set_duty(i, 100)
+	end
+end
+
 function Monitor:set_state(state)
+	if state == 'dead' then
+		safety_turn_all_fans_on()
+	end
 	if state ~= self.state then
 		log('state %s', state)
 		self.led_mode = assert(state_to_led[state])

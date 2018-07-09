@@ -48,6 +48,12 @@ define uboot/dm1-g19-sd
 endef
 UBOOTS += dm1-g19-sd
 
+define uboot/am1-s9-sd
+	TITLE:=U-Boot $(PKG_VERSION) for AntMiner S9 Miner Control Board (SD)
+	CONFIG:=am1_s9_sd
+endef
+UBOOTS += am1-s9-sd
+
 define uboot/dm1-g9
 	TITLE:=U-Boot $(PKG_VERSION) for DragonMint T1/G9 Miner Control Board
 	CONFIG:=dm1_g9
@@ -59,6 +65,12 @@ define uboot/dm1-g19
 	CONFIG:=dm1_g19
 endef
 UBOOTS += dm1-g19
+
+define uboot/am1-s9
+	TITLE:=U-Boot $(PKG_VERSION) for AntMiner S9 Miner Control Board
+	CONFIG:=am1_s9
+endef
+UBOOTS += am1-s9
 
 define Package/uboot-zynq-dm1-g9-sd/config
 	source "$(SOURCE)/Config.in"

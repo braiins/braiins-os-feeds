@@ -1,0 +1,3 @@
+config EXTERNAL_BMMINER_TREE
+    string "Use external BMMiner tree" if DEVEL
+    default ""

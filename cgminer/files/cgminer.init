@@ -44,7 +44,7 @@ END
 start_service()
 {
 	procd_open_instance
-	procd_set_param command "$PROG" -c "$CONF"
+	procd_set_param command "$PROG" -c "$CONF" --default-config "$CONF"
 	procd_set_param respawn 3600 5 0
 	procd_set_param stdout 0
 	procd_set_param stderr 1

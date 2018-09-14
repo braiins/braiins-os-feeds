@@ -27,6 +27,14 @@ boot()
 	"api-allow" : "W:0/0",
 	"api-listen" : true,
 	"api-port" : "4028",
+
+	"bitmain-use-vil" : true,
+	"bitmain-freq" : "650",
+	"bitmain-voltage" : "0706",
+	"multi-version" : "1"
+	"fixed-freq" : true,
+	"no-pre-heat" : true,
+
 	"A1Pll1" : "1332",
 	"A1Pll2" : "1332",
 	"A1Pll3" : "1332",

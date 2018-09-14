@@ -1,4 +1,5 @@
 include $(TOPDIR)/rules.mk
+include $(INCLUDE_DIR)/kernel.mk
 
 PKG_NAME:=cgminer
 PKG_VERSION:=4.10.0
@@ -27,7 +28,7 @@ define Package/cgminer
   CATEGORY:=Utilities
   TITLE:=ASIC and FPGA Miner for Bitcoin
   URL:=http://ck.kolivas.org/apps/cgminer
-  DEPENDS:=+libcurl
+  DEPENDS:=+libcurl +zlib
 endef
 
 define Package/cgminer/description
@@ -37,6 +38,34 @@ endef
 define Package/cgminer/config
 	source "$(SOURCE)/Config.in"
 endef
+
+define Package/cgminer/conffiles
+/etc/cgminer.conf
+endef
+
+ifeq ($(SUBTARGET),am1-s9)
+
+define Build/Configure
+	( cd $(PKG_BUILD_DIR); ./setminertype S9 )
+endef
+
+define Build/Compile
+	+$(MAKE) CROSS_PREFIX=$(TARGET_CROSS) -C $(PKG_BUILD_DIR)
+endef
+
+define Package/cgminer/install
+	$(INSTALL_DIR) $(1)/usr/bin
+	$(INSTALL_BIN) $(PKG_BUILD_DIR)/bmminer $(1)/usr/bin/cgminer
+
+	$(INSTALL_DIR) $(1)/etc/bmminer
+	$(INSTALL_BIN) ./files/am/hash_s8_app.txt $(1)/etc/bmminer/
+	$(INSTALL_BIN) ./files/am/dsPIC33EP16GS202_app.txt $(1)/etc/bmminer/
+
+	$(INSTALL_DIR) $(1)/etc/init.d/
+	$(INSTALL_BIN) ./files/cgminer.init $(1)/etc/init.d/cgminer
+endef
+
+else
 
 CPGEN_CONFIGURE:= \
 	CFLAGS="$(TARGET_CFLAGS) $(TARGET_CPPFLAGS) -Os -g -ggdb" \
@@ -61,10 +90,6 @@ define Build/Compile
 		install
 endef
 
-define Package/cgminer/conffiles
-/etc/cgminer.conf
-endef
-
 define Package/cgminer/install
 	$(INSTALL_DIR) $(1)/usr/bin
 	$(INSTALL_BIN) $(PKG_INSTALL_DIR)/usr/bin/cgminer $(1)/usr/bin/cgminer
@@ -73,5 +98,7 @@ define Package/cgminer/install
 	$(INSTALL_DIR) $(1)/etc/init.d/
 	$(INSTALL_BIN) ./files/cgminer.init $(1)/etc/init.d/cgminer
 endef
+
+endif
 
 $(eval $(call BuildPackage,cgminer))

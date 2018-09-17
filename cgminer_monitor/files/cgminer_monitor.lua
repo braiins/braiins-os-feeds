@@ -17,11 +17,24 @@ local SAMPLE_TIME = 1
 local MHS = {60, 300, 900}
 
 
-local LED_PATH = '/sys/devices/soc0/amba_pl/amba_pl:leds/leds/Red LED'
+local LED_PATH = '/sys/class/leds/Red LED'
+
+local MINER_MODEL_PATH = '/tmp/sysinfo/board_name'
 
 -- utility functions
 function log(fmt, ...)
 	io.write((fmt..'\n'):format(...))
+end
+
+function get_miner_model()
+	local f = io.open(MINER_MODEL_PATH, 'r')
+	if not f then
+		log('cannot determine miner model')
+		return
+	end
+	local model = f:read('*l')
+	f:close()
+	return model
 end
 
 -- class declarations
@@ -162,7 +175,7 @@ function CGMinerDevs:get(id)
 end
 
 -- Monitor class
-function Monitor.new(history_size, led_path)
+function Monitor.new(history_size, led_path, model)
 	local self = setmetatable({}, Monitor)
 	self.history = History.new(history_size)
 	self.last_time = 0
@@ -171,6 +184,7 @@ function Monitor.new(history_size, led_path)
 	self.led_mode = 'on'
 	self.led_override = false
 	self.led = Led.new(led_path)
+	self.model = model
 	for _ = 1,CHAINS do
 		local chain = {}
 		chain.temp = 0
@@ -236,6 +250,34 @@ function Monitor:interpolate(count)
 		self.history:append(sample)
 		last_time = current_time
 	end
+end
+
+function Monitor:add_zero_sample()
+	local current_time = get_uptime()
+	local sample = {}
+
+	sample.time = current_time
+	sample.chains = {}
+
+	for i, chain in ipairs(self.chains) do
+		local id = i - 1
+
+		chain.temp = 0
+		chain.errs_last = 0
+		chain.accepted = 0
+		chain.rejected = 0
+		chain.mhs_cur = 0
+		chain.mhs_nom = 0
+		chain.mhs_max = 0
+
+		for _, mhs in pairs(chain.mhs) do
+			mhs:add(chain.mhs_cur, current_time)
+		end
+		-- copy current chain values to the sample
+		self.copy_chain2sample(chain, sample, id)
+	end
+	self.history:append(sample)
+	self.last_time = current_time
 end
 
 function Monitor:add_sample(response)
@@ -343,16 +385,20 @@ local function fan_set_duty(n, duty)
 	write_to_file(prefix..'/pwm0/enable', '1')
 end
 
-local function safety_turn_all_fans_on()
-	print('turning all fans on')
-	for i = 0, 2 do
-		fan_set_duty(i, 100)
+-- TODO: implement this function for all models and just fill it in during
+-- initialization as a method
+function Monitor:safety_turn_all_fans_on()
+	if self.model ~= 'am1-s9' then
+		log('turning all fans on')
+		for i = 0, 2 do
+			fan_set_duty(i, 100)
+		end
 	end
 end
 
 function Monitor:set_state(state)
 	if state == 'dead' then
-		safety_turn_all_fans_on()
+		self:safety_turn_all_fans_on()
 	end
 	if state ~= self.state then
 		log('state %s', state)
@@ -362,8 +408,8 @@ function Monitor:set_state(state)
 	end
 end
 
-
-local monitor = Monitor.new(HISTORY_SIZE, LED_PATH)
+local model = get_miner_model()
+local monitor = Monitor.new(HISTORY_SIZE, LED_PATH, model)
 local server = assert(SOCKET.bind(SERVER_HOST, SERVER_PORT))
 
 -- server accept is interrupted every second to get new sample from cgminer
@@ -378,7 +424,8 @@ while true do
 
 	if monitor:sample_time() then
 		local cgminer = assert(SOCKET.tcp())
-		local new_state = 'dead'
+		local new_state
+		local sample = nil
 		cgminer:settimeout(3)
 		local ret, err = cgminer:connect(CGMINER_HOST, CGMINER_PORT)
 		if ret then
@@ -387,16 +434,20 @@ while true do
 			local result = cgminer:receive('*a')
 			if result then
 				-- remove null from string
-				result = result:sub(1, -2)
-
-				monitor:add_sample(result)
-				-- check if miner is running ok
-				if monitor:check_healthy() then
-					new_state = 'ok'
-				else
-					new_state = 'sick'
-				end
+				sample = result:sub(1, -2)
 			end
+		end
+		if sample then
+			-- check if miner is running ok
+			monitor:add_sample(sample)
+			if monitor:check_healthy() then
+				new_state = 'ok'
+			else
+				new_state = 'sick'
+			end
+		else
+			monitor:add_zero_sample()
+			new_state = 'dead'
 		end
 		monitor:set_state(new_state)
 	end

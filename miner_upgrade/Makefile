@@ -23,6 +23,9 @@ endef
 define Package/miner_upgrade/install
 	$(INSTALL_DIR) $(1)/usr/sbin
 	$(INSTALL_BIN) ./files/miner_upgrade.sh $(1)/usr/sbin/
+
+	$(INSTALL_DIR) $(1)/etc/init.d/
+	$(INSTALL_BIN) ./files/miner_upgrade.init $(1)/etc/init.d/miner_upgrade
 endef
 
 $(eval $(call BuildPackage,miner_upgrade))

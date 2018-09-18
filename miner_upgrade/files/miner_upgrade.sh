@@ -1,5 +1,8 @@
 #!/bin/sh
 
+# redirect STDOUT and STDERR to /dev/kmsg
+exec 1<&- 2<&- 1>/dev/kmsg 2>&1
+
 set -e
 
 FIRMWARE_DIR="/tmp/firmware"

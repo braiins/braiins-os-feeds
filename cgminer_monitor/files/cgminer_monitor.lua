@@ -330,16 +330,21 @@ end
 
 -- check if all chains are at least at 80% of nominal rate
 function Monitor:check_healthy()
-	local healthy = true
+	local dead = true
 	for i, chain in ipairs(self.chains) do
 		if chain.mhs_nom > 0 then
 			--log("chain %d health %f", i, chain.mhs_cur/chain.mhs_nom*100)
+			dead = false
 			if chain.mhs_cur < chain.mhs_nom*0.8 then
-				healthy = false
+				return 'sick'
 			end
 		end
 	end
-	return healthy
+	if dead then
+		return 'dead'
+	else
+		return 'ok'
+	end
 end
 
 function Monitor:get_response()
@@ -440,15 +445,10 @@ while true do
 		if sample then
 			-- check if miner is running ok
 			monitor:add_sample(sample)
-			if monitor:check_healthy() then
-				new_state = 'ok'
-			else
-				new_state = 'sick'
-			end
 		else
 			monitor:add_zero_sample()
-			new_state = 'dead'
 		end
+		new_state = monitor:check_healthy()
 		monitor:set_state(new_state)
 	end
 	if client then

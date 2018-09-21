@@ -7,7 +7,7 @@ PKG_MAINTAINER:=Libor Vasicek <libor.vasicek@braiins.cz>
 # set firmware version
 PKG_RELEASE:=$(call qstrip,$(CONFIG_FIRMWARE_VERSION))
 
-MINER_FEEDS_SERVER:=https://miner.slushpool.com/$(SUBTARGET)
+MINER_FEEDS_SERVER:=https://feeds.braiins-os.org/$(SUBTARGET)
 MINER_FEEDS_CONFIG:=/etc/opkg/minerfeeds.conf
 
 include $(INCLUDE_DIR)/package.mk

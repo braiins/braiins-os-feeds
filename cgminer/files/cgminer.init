@@ -30,7 +30,6 @@ boot()
 
 	"bitmain-use-vil" : true,
 	"bitmain-freq" : "650",
-	"bitmain-voltage" : "0706",
 	"multi-version" : "1",
 	"fixed-freq" : true,
 	"no-pre-heat" : true,

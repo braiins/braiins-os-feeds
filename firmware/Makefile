@@ -63,8 +63,7 @@ define Package/firmware/postrm
 
 # if this script is run then simple package remove has been called
 echo "Processing factory reset..."
-fw_setenv factory_reset yes
-reboot
+miner factory_reset
 endef
 
 $(eval $(call BuildPackage,firmware))

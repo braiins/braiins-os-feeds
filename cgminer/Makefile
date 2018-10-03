@@ -47,6 +47,7 @@ ifeq ($(SUBTARGET),am1-s9)
 
 define Build/Configure
 	( cd $(PKG_BUILD_DIR); ./setminertype S9 )
+	echo "#define BOS_FIRMWARE_VERSION \"$(SUBTARGET)_$(CONFIG_FIRMWARE_VERSION)\"" > "$(PKG_BUILD_DIR)/braiins-os.h"
 endef
 
 define Build/Compile
@@ -79,6 +80,7 @@ CPGEN_CONFIGURE:= \
 
 define Build/Configure
 	( cd $(PKG_BUILD_DIR); sed -i "s/#define CHIP_A[0-9]/#define CHIP_A5/g" "$(PKG_BUILD_DIR)/miner.h" )
+	echo "#define BOS_FIRMWARE_VERSION \"$(SUBTARGET)_$(CONFIG_FIRMWARE_VERSION)\"" > "$(PKG_BUILD_DIR)/braiins-os.h"
 	( cd $(PKG_BUILD_DIR); ./autogen.sh )
 	( cd $(PKG_BUILD_DIR); $(CPGEN_CONFIGURE) )
 endef

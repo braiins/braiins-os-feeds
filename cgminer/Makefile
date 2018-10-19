@@ -43,6 +43,13 @@ define Package/cgminer/conffiles
 /etc/cgminer.conf
 endef
 
+define INSTALL_INIT
+	$(INSTALL_BIN) $(1) $(3)
+	sed -n '/# insert/,$$$$!p' $(1) >$(3)
+	cat $(2) >>$(3)
+	sed -n '1,/# insert/!p' $(1) >>$(3)
+endef
+
 ifeq ($(SUBTARGET),am1-s9)
 
 define Build/Configure
@@ -63,7 +70,7 @@ define Package/cgminer/install
 	$(INSTALL_BIN) ./files/am/dsPIC33EP16GS202_app.txt $(1)/etc/bmminer/
 
 	$(INSTALL_DIR) $(1)/etc/init.d/
-	$(INSTALL_BIN) ./files/cgminer.init $(1)/etc/init.d/cgminer
+	$(call INSTALL_INIT,./files/cgminer.init,./files/cgminer-am.init,$(1)/etc/init.d/cgminer)
 endef
 
 else
@@ -98,7 +105,7 @@ define Package/cgminer/install
 	$(INSTALL_BIN) ./files/cgminer-shutdown.sh $(1)/usr/bin/cgminer-shutdown.sh
 
 	$(INSTALL_DIR) $(1)/etc/init.d/
-	$(INSTALL_BIN) ./files/cgminer.init $(1)/etc/init.d/cgminer
+	$(call INSTALL_INIT,./files/cgminer.init,./files/cgminer-dm.init,$(1)/etc/init.d/cgminer)
 endef
 
 endif

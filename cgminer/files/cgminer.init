@@ -14,6 +14,9 @@ boot()
 		local pool_port=$(fw_printenv -n miner_pool_port 2>/dev/null)
 		local pool_user=$(fw_printenv -n miner_pool_user 2>/dev/null)
 		local pool_pass=$(fw_printenv -n miner_pool_pass 2>/dev/null)
+		local miner_freq=$(fw_printenv -n miner_freq 2>/dev/null)
+		local miner_voltage=$(fw_printenv -n miner_voltage 2>/dev/null)
+		local miner_fixed_freq=$(fw_printenv -n miner_fixed_freq 2>/dev/null)
 
 		cat > "$CONF" <<END
 {
@@ -28,20 +31,7 @@ boot()
 	"api-listen" : true,
 	"api-port" : "4028",
 
-	"bitmain-use-vil" : true,
-	"bitmain-freq" : "650",
-	"multi-version" : "1",
-	"fixed-freq" : true,
-	"no-pre-heat" : true,
-
-	"A1Pll1" : "1332",
-	"A1Pll2" : "1332",
-	"A1Pll3" : "1332",
-	"A1Pll4" : "1332",
-	"A1Pll5" : "1332",
-	"A1Pll6" : "1332",
-	"A1Vol" : "10",
-	"enabled-chains" : "0,1,2"
+    # insert
 }
 END
 	fi

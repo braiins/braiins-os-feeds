@@ -1,0 +1,5 @@
+	"bitmain-use-vil" : true,
+	"bitmain-freq" : "${miner_freq:-650}",
+	"multi-version" : "1",
+	"fixed-freq" : ${miner_fixed_freq:-true},
+	"no-pre-heat" : true

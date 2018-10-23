@@ -35,6 +35,7 @@ boot()
 }
 END
 	fi
+	cgminer_config_migrate "$CONF" $(cat /tmp/sysinfo/board_name)
 	start "$@"
 }
 

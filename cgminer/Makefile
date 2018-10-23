@@ -64,6 +64,7 @@ endef
 define Package/cgminer/install
 	$(INSTALL_DIR) $(1)/usr/bin
 	$(INSTALL_BIN) $(PKG_BUILD_DIR)/bmminer $(1)/usr/bin/cgminer
+	$(INSTALL_BIN) ./files/cgminer_config_migrate.lua $(1)/usr/bin/cgminer_config_migrate
 
 	$(INSTALL_DIR) $(1)/etc/bmminer
 	$(INSTALL_BIN) ./files/am/hash_s8_app.txt $(1)/etc/bmminer/

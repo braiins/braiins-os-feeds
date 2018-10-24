@@ -12,13 +12,18 @@ FACTORY_SIZE=0xC00000
 FPGA_OFFSET=0x1400000
 FPGA_SIZE=0x100000
 
+BOOT_OFFSET=0x1500000
+BOOT_SIZE=0x80000
+
 SD_DIR=/mnt
 
 SD_FACTORY_BIN_PATH=$SD_DIR/factory.bin
 SD_SYSTEM_BIT_PATH=$SD_DIR/system.bit
+SD_BOOT_BIN_PATH=$SD_DIR/boot.bin
 
 FACTORY_BIN_PATH=/tmp/factory.bin
 SYSTEM_BIT_PATH=/tmp/system.bit
+BOOT_BIN_PATH=/tmp/boot.bin
 
 mtd_write() {
 	mtd -e "$2" write "$1" "$2"
@@ -57,6 +62,9 @@ if [ x${FACTORY_RESET} == x"yes" ]; then
 		# compress bitstream for FPGA
 		gzip -c "$SD_SYSTEM_BIT_PATH" > "$SYSTEM_BIT_PATH"
 
+		# copy SPL bootloader to temp
+		cp "$SD_BOOT_BIN_PATH" "$BOOT_BIN_PATH"
+
 		umount ${SD_DIR}
 	else
 		# get uncompressed factory image
@@ -67,6 +75,11 @@ if [ x${FACTORY_RESET} == x"yes" ]; then
 		# get bitstream for FPGA
 		nanddump -s ${FPGA_OFFSET} -l ${FPGA_SIZE} ${RECOVERY_MTD} \
 		> "$SYSTEM_BIT_PATH"
+
+		# get uncompressed SPL bootloader
+		nanddump -s ${BOOT_OFFSET} -l ${BOOT_SIZE} ${RECOVERY_MTD} \
+		| gunzip \
+		> "$BOOT_BIN_PATH"
 	fi
 
 	# write the same FPGA bitstream to both MTD partitions
@@ -81,6 +94,9 @@ if [ x${FACTORY_RESET} == x"yes" ]; then
 
 	# remove factory reset mode from U-Boot env
 	fw_setenv factory_reset
+
+	# the SPL is restored as last one
+	mtd_write "$BOOT_BIN_PATH" boot
 
 	sync
 	echo "recovery: factory reset has been successful!"

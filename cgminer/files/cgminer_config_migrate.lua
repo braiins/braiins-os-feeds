@@ -8,6 +8,7 @@ local CGMINER_CONFIG = '/etc/cgminer.conf'
 local function migrate_am1(cfg)
 	local ver = tonumber(cfg['config-format-revision'])
 	if not ver then
+		-- upgrade from prehistoric to version 1
 		for i = 1, 6 do
 			cfg[('A1Pll%d'):format(i)] = nil
 		end
@@ -16,16 +17,26 @@ local function migrate_am1(cfg)
 		cfg['bitmain-voltage'] = nil
 		-- enable multi-version if upgrading
 		cfg['multi-version'] = '4'
-	elseif ver == 1 then
-		-- latest
-		return false
+		-- update config format revision
+		cfg['config-format-revision'] = '1'
+		return true
 	end
-	-- update config format revision
-	cfg['config-format-revision'] = '1'
-	return true
+	return false
 end
 
 local function migrate_dm1(cfg)
+	local ver = tonumber(cfg['config-format-revision'])
+	if not ver then
+		-- upgrade from prehistoric to version 1
+		cfg['bitmain-use-vil'] = nil
+		cfg['bitmain-freq'] = nil
+		cfg['no-pre-heat'] = nil
+		cfg['bitmain-voltage'] = nil
+		cfg['multi-version'] = nil
+		cfg['fixed-freq'] = nil
+		cfg['config-format-revision'] = '1'
+		return true
+	end
 	return false
 end
 
@@ -33,6 +44,8 @@ end
 -- returns true if config was migrated, false if it is the latest revision
 migrate_fns = {
 	['am1-s9'] = migrate_am1,
+	['dm1-g9'] = migrate_dm1,
+	['dm1-g19'] = migrate_dm1,
 }
 
 function main(arg)

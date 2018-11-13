@@ -3,7 +3,7 @@
 START=99
 
 USE_PROCD=1
-PROG=/usr/sbin/miner_upgrade.sh
+PROG=/usr/sbin/bos_upgrade.sh
 
 start_service() {
 	procd_open_instance

@@ -29,7 +29,7 @@ mtd_write() {
 	mtd -e "$2" write "$1" "$2"
 }
 
-echo "Miner is in the recovery mode!"
+echo "System is in the recovery mode!"
 
 # try to set LEDs to signal recovery mode
 echo timer > "/sys/class/leds/Green LED/trigger"

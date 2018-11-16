@@ -28,6 +28,7 @@ factory_reset() {
 }
 
 run_recovery() {
+	set +e
 	if [ $# -gt 0 ]; then
 		echo "command 'run_recovery' does not take any argument"
 		exit 1
@@ -38,8 +39,22 @@ run_recovery() {
 		echo "Factory reset can fix this issue"
 		exit 1
 	fi
+	if [ $(uci get network.lan.proto) == 'static' ]; then
+		net_ip=$(uci get network.lan.ipaddr 2>/dev/null)
+		net_mask=$(uci get network.lan.netmask 2>/dev/null)
+		net_gateway=$(uci get network.lan.gateway 2>/dev/null)
+		net_dns_servers=$(uci get network.lan.dns 2>/dev/null | tr " " ,)
+	fi
+	net_hostname=$(uci get network.lan.hostname 2>/dev/null)
 	# set 'recovery' variable in U-Boot environment
-	fw_setenv recovery yes
+	fw_setenv --script - <<-EOF
+		recovery=yes
+		recovery_net_ip=$net_ip
+		recovery_net_mask=$net_mask
+		recovery_net_gateway=$net_gateway
+		recovery_net_dns_servers=$net_dns_servers
+		recovery_net_hostname=$net_hostname
+	EOF
 	# U-Boot boot from different partition whet variable 'recovery' is set
 	reboot
 }

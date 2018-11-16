@@ -105,3 +105,12 @@ if [ x${FACTORY_RESET} == x"yes" ]; then
 	echo "Restarting system..."
 	reboot
 fi
+
+# remove network settings passed from standard mode
+fw_setenv --script - <<-EOF
+	recovery_net_ip
+	recovery_net_mask
+	recovery_net_gateway
+	recovery_net_dns_servers
+	recovery_net_hostname
+EOF

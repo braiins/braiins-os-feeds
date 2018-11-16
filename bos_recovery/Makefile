@@ -25,6 +25,9 @@ define Package/bos_recovery/install
 	$(INSTALL_DIR) $(1)/etc/
 	$(CP) ./files/bos_mode $(1)/etc/
 
+	$(INSTALL_DIR) $(1)/etc/profile.d/
+	$(INSTALL_BIN) ./files/bos_recovery.profile $(1)/etc/profile.d/bos_recovery.sh
+
 	$(INSTALL_DIR) $(1)/usr/sbin
 	$(INSTALL_BIN) ./files/bos_recovery.sh $(1)/usr/sbin/
 

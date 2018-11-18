@@ -31,6 +31,9 @@ mtd_write() {
 
 echo "System is in the recovery mode!"
 
+# fix U-Boot environment configuration with correct MTD partiton
+cp /tmp/fw_env.config /etc/
+
 # try to set LEDs to signal recovery mode
 echo timer > "/sys/class/leds/Green LED/trigger"
 echo nand-disk > "/sys/class/leds/Red LED/trigger"

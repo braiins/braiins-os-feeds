@@ -46,6 +46,11 @@ run_recovery() {
 		net_dns_servers=$(uci get network.lan.dns 2>/dev/null | tr " " ,)
 	fi
 	net_hostname=$(uci get network.lan.hostname 2>/dev/null)
+	recovery_mtdparts=$(fw_printenv -n recovery_mtdparts 2>/dev/null)
+	if [ -n "$recovery_mtdparts" ]; then
+		# append overlapping partition with bOS U-Boot environment
+		recovery_mtdparts="$recovery_mtdparts,512k@0x700000(recovery_uboot_env)"
+	fi
 	# set 'recovery' variable in U-Boot environment
 	fw_setenv --script - <<-EOF
 		recovery=yes
@@ -54,8 +59,9 @@ run_recovery() {
 		recovery_net_gateway=$net_gateway
 		recovery_net_dns_servers=$net_dns_servers
 		recovery_net_hostname=$net_hostname
+		recovery_mtdparts=$recovery_mtdparts
 	EOF
-	# U-Boot boot from different partition whet variable 'recovery' is set
+	# U-Boot boot from different partition when variable 'recovery' is set
 	reboot
 }
 

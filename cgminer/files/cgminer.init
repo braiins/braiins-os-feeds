@@ -18,6 +18,16 @@ boot()
 		local miner_voltage=$(fw_printenv -n miner_voltage 2>/dev/null)
 		local miner_fixed_freq=$(fw_printenv -n miner_fixed_freq 2>/dev/null)
 
+		# applies only to AM1
+		if [ -z "$miner_fixed_freq" ]; then
+			miner_fixed_line=""
+			miner_freq_line=""
+		else
+			miner_freq_line="\"bitmain-freq\": \"${miner_freq}\","
+			miner_fixed_line="\"fixed-freq\": true,"
+		fi
+
+
 		cat > "$CONF" <<END
 {
 	"pools" : [
@@ -27,6 +37,7 @@ boot()
 			"pass" : "${pool_pass}"
 		}
 	],
+	"config-format-revision": "1",
 	"api-allow" : "W:0/0",
 	"api-listen" : true,
 	"api-port" : "4028",

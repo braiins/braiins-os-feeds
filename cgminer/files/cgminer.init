@@ -19,12 +19,10 @@ boot()
 		local miner_fixed_freq=$(fw_printenv -n miner_fixed_freq 2>/dev/null)
 
 		# applies only to AM1
-		if [ -z "$miner_fixed_freq" ]; then
-			miner_fixed_line=""
-			miner_freq_line=""
-		else
+		if [ "$miner_fixed_freq" == "true" ]; then
 			miner_freq_line="\"bitmain-freq\": \"${miner_freq}\","
-			miner_fixed_line="\"fixed-freq\": true,"
+		else
+			miner_freq_line=""
 		fi
 
 

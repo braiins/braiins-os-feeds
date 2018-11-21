@@ -18,7 +18,7 @@ endef
 
 define Package/bos_sd/install
 	$(INSTALL_DIR) $(1)/etc/
-	$(INSTALL_BIN) ./files/bos_mode $(1)/etc/
+	$(CP) ./files/bos_mode $(1)/etc/
 endef
 
 $(eval $(call BuildPackage,bos_sd))

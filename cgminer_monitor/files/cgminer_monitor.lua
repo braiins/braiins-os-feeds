@@ -17,7 +17,8 @@ local SAMPLE_TIME = 1
 local MHS = {60, 300, 900}
 
 
-local LED_PATH = '/sys/class/leds/Red LED'
+local RED_LED_PATH = '/sys/class/leds/Red LED'
+local GREEN_LED_PATH = '/sys/class/leds/Green LED'
 
 local MINER_MODEL_PATH = '/tmp/sysinfo/board_name'
 
@@ -76,7 +77,7 @@ function Led:sysfs_write(attr, val)
 end
 
 function Led:set_mode(mode)
-	log('led mode %s', mode)
+	log('%s mode %s', self.path, mode)
 	if mode == 'on' or mode == 'off' then
 		self:sysfs_write('trigger', 'none')
 		if mode == 'off' then
@@ -84,10 +85,13 @@ function Led:set_mode(mode)
 		else
 			self:sysfs_write('brightness', '255')
 		end
-	elseif mode == 'blink-fast' or mode == 'blink-slow' then
+	elseif mode == 'blink-fast' or mode == 'blink-slow' or mode == 'blink-slooow' then
 		local time_on, time_off = 50, 950
 		if mode == 'blink-fast' then
 			time_off = 50
+		elseif mode == 'blink-slooow' then
+			time_on = 1000
+			time_off = 1000
 		end
 		self:sysfs_write('trigger', 'timer')
 		self:sysfs_write('delay_on', tostring(time_on))
@@ -175,15 +179,15 @@ function CGMinerDevs:get(id)
 end
 
 -- Monitor class
-function Monitor.new(history_size, led_path, model)
+function Monitor.new(history_size, red_led, green_led, model)
 	local self = setmetatable({}, Monitor)
 	self.history = History.new(history_size)
 	self.last_time = 0
 	self.chains = {}
 	self.state = ''
-	self.led_mode = 'on'
 	self.led_override = false
-	self.led = Led.new(led_path)
+	self.red_led = red_led
+	self.green_led = green_led
 	self.model = model
 	for _ = 1,CHAINS do
 		local chain = {}
@@ -357,19 +361,27 @@ function Monitor:get_response()
 	end
 end
 
-function Monitor:update_led()
-	if self.led_override then
-		self.led:set_mode('blink-fast')
-	else
-		self.led:set_mode(self.led_mode)
-	end
-end
-
-local state_to_led = {
+local state_to_red_led = {
 	dead = 'on',
-	ok = 'off',
 	sick = 'blink-slow',
+	ok = 'off',
 }
+local state_to_green_led = {
+	dead = 'on',
+	sick = 'on',
+	ok = 'blink-slooow',
+}
+
+function Monitor:update_leds()
+	local red_mode = assert(state_to_red_led[self.state])
+	if self.led_override then
+		self.red_led:set_mode('blink-fast')
+	else
+		self.red_led:set_mode(red_mode)
+	end
+	local green_mode = assert(state_to_green_led[self.state])
+	self.green_led:set_mode(green_mode);
+end
 
 local function write_to_file(path, fmt, ...)
 	local f = io.open(path, 'w')
@@ -407,14 +419,13 @@ function Monitor:set_state(state)
 	end
 	if state ~= self.state then
 		log('state %s', state)
-		self.led_mode = assert(state_to_led[state])
 		self.state = state
-		self:update_led()
+		self:update_leds()
 	end
 end
 
 local model = get_miner_model()
-local monitor = Monitor.new(HISTORY_SIZE, LED_PATH, model)
+local monitor = Monitor.new(HISTORY_SIZE, Led.new(RED_LED_PATH), Led.new(GREEN_LED_PATH), model)
 local server = assert(SOCKET.bind(SERVER_HOST, SERVER_PORT))
 
 -- server accept is interrupted every second to get new sample from cgminer
@@ -465,7 +476,7 @@ while true do
 			elseif w == 'off' then
 				monitor.led_override = false
 			end
-			monitor:update_led()
+			monitor:update_leds()
 		end
 		client:close()
 	end

@@ -35,8 +35,12 @@ echo "System is in the recovery mode!"
 cp /tmp/fw_env.config /etc/
 
 # try to set LEDs to signal recovery mode
-echo timer > "/sys/class/leds/Green LED/trigger"
-echo nand-disk > "/sys/class/leds/Red LED/trigger"
+green_led="/sys/class/leds/Green LED"
+red_led="/sys/class/leds/Red LED"
+echo timer > "$green_led/trigger"
+echo 70 > "$green_led/delay_on"
+echo 600 > "$green_led/delay_off"
+echo nand-disk > "$red_led/trigger"
 
 # prevent NAND corruption when U-Boot env cannot be read
 if [ -n "$(fw_printenv 2>&1 >/dev/null)" ]; then

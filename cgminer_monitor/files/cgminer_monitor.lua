@@ -1,5 +1,46 @@
 #!/usr/bin/lua
 
+function printr(fn, x)
+	local max = 8
+	local function rec(x, n)
+		local t = type(x)
+		if t == 'table' then
+			local indent = ('\t'):rep(n)
+			if n >= max then
+				fn('{ ... }')
+				return
+			end
+			fn('{\n')
+			for k, v in pairs(x) do
+				fn(indent)
+				if type(k) == 'string' and k:match('^[%a_][%w_]*$') then
+					fn('\t'..k.. ' = ')
+				else
+					fn('\t[')
+					rec(k, n+1)
+					fn('] = ')
+				end
+				rec(v, n + 1)
+				fn(',\n')
+			end
+			fn(indent)
+			fn('}')
+		elseif t == 'string' then
+			fn(string.format('%q', x))
+		else
+			fn(tostring(x))
+		end
+	end
+	rec(x, 0)
+	fn('\n')
+end
+
+function pp(x)
+	printr(io.write, x)
+end
+
+
+
 local CJSON = require "cjson"
 local SOCKET = require "socket"
 local NX = require "nixio"
@@ -10,11 +51,10 @@ local CGMINER_PORT = 4028
 local SERVER_HOST = "*"
 local SERVER_PORT = 4029
 
-local HISTORY_SIZE = 60
+-- chains must be running at leat at 80% of nominal rate
+local MINIMAL_RATE = 80
 
-local CHAINS = 6
 local SAMPLE_TIME = 1
-local MHS = {60, 300, 900}
 
 
 local RED_LED_PATH = '/sys/class/leds/Red LED'
@@ -25,6 +65,10 @@ local MINER_MODEL_PATH = '/tmp/sysinfo/board_name'
 -- utility functions
 function log(fmt, ...)
 	io.write((fmt..'\n'):format(...))
+end
+
+function push(t, x)
+	t[#t + 1] = x
 end
 
 function get_miner_model()
@@ -39,14 +83,8 @@ function get_miner_model()
 end
 
 -- class declarations
-local History = {}
-History.__index = History
-
-local RollingAverage = {}
-RollingAverage.__index = RollingAverage
-
-local CGMinerDevs = {}
-CGMinerDevs.__index = CGMinerDevs
+local CGMinerStatus = {}
+CGMinerStatus.__index = CGMinerStatus
 
 local Monitor = {}
 Monitor.__index = Monitor
@@ -102,263 +140,73 @@ function Led:set_mode(mode)
 	end
 end
 
-
--- History class
-function History.new(max_size)
-	local self = setmetatable({}, History)
-	self.max_size = max_size
-	self.size = 0
-	self.pos = 1
-	return self
-end
-
-function History:append(value)
-	if self.size < self.max_size then
-		table.insert(self, value)
-		self.size = self.size + 1
-	else
-		self[self.pos] = value
-		self.pos = self.pos % self.max_size + 1
-	end
-end
-
-function History:values()
-	local i = 0
-	return function()
-		i = i + 1
-		if i <= self.size then
-			return self[(self.pos - i - 1) % self.size + 1]
-		end
-	end
-end
-
-function History:last_value()
-	if self.size then
-		return self[self.pos]
-	end
-end
-
--- RollingAverage class
-function RollingAverage.new(interval)
-	local self = setmetatable({}, RollingAverage)
-	self.interval = interval
-	self.time = 0
-	self.value = 0
-	return self
-end
-
-function RollingAverage:add(value, time)
-	local dt = time - self.time
-
-	if dt <= 0 then
-		return
-	end
-
-	local fprop = 1 - (1 / math.exp(dt / self.interval))
-	local ftotal = 1 + fprop
-
-	self.time = time
-	self.value = (self.value + (value / dt * fprop)) / ftotal
-end
-
 -- CGMiner class
-function CGMinerDevs.new(response)
-	local self = setmetatable({}, CGMinerDevs)
-	self.data = response and CJSON.decode(response)
-	return self
-end
-
-function CGMinerDevs:get(id)
-	if self.data then
-		for _, dev in ipairs(self.data.DEVS) do
-			if dev.ID == id then
-				return dev
-			end
-		end
+function CGMinerStatus.new(response)
+	local self = setmetatable({}, CGMinerStatus)
+	local json = response and CJSON.decode(response)
+	self.chains = {}
+	for _, dev in ipairs(json.devs[1].DEVS) do
+		local chain = {
+			mhs_cur = tonumber(dev["MHS 5s"]) or 0,
+			mhs_nom = tonumber(dev["nominal MHS"]) or 0,
+			mhs_max = tonumber(dev["maximal MHS"]) or 0,
+		}
+		push(self.chains, chain)
 	end
+	self.pools = json.pools[1].POOLS
+	return self
 end
 
 -- Monitor class
-function Monitor.new(history_size, red_led, green_led, model)
+function Monitor.new(red_led, green_led, model)
 	local self = setmetatable({}, Monitor)
-	self.history = History.new(history_size)
 	self.last_time = 0
-	self.chains = {}
 	self.state = ''
 	self.led_override = false
 	self.red_led = red_led
 	self.green_led = green_led
 	self.model = model
-	for _ = 1,CHAINS do
-		local chain = {}
-		chain.temp = 0
-		chain.errs_last = 0
-		chain.errs = 0
-		chain.accepted = 0
-		chain.rejected = 0
-		chain.mhs_cur = 0
-		chain.mhs_max = 0
-		chain.mhs_nom = 0
-		chain.mhs = {}
-		for _, interval in ipairs(MHS) do
-			chain.mhs[interval] = RollingAverage.new(interval)
-		end
-		table.insert(self.chains, chain)
-	end
-	self:set_state('dead')
+	self:set_state('dead', 'initialization')
 	return self
 end
+
 
 function Monitor:sample_time()
 	local time_diff = get_uptime() - self.last_time
 	return math.abs(time_diff) >= SAMPLE_TIME
 end
 
-function Monitor.copy_chain2sample(chain, sample, id)
-	local sample_chain = {}
-	sample_chain.id = id
-	sample_chain.temp = chain.temp
-	sample_chain.errs = chain.errs
-	sample_chain.acpt = chain.accepted
-	sample_chain.rjct = chain.rejected
-	sample_chain.mhs = {chain.mhs_cur }
-	for _, interval in ipairs(MHS) do
-		local mhs = chain.mhs[interval]
-		table.insert(sample_chain.mhs, mhs.value)
-	end
-	-- TODO: do not insert when each value is zero
-	table.insert(sample.chains, sample_chain)
-end
-
--- interpolation is done by duplication of last values
-function Monitor:interpolate(count)
-	local last_time = self.last_time
-
-	for i = 1,count do
-		local sample = {}
-		local current_time = last_time + SAMPLE_TIME
-
-		sample.time = current_time
-		sample.chains = {}
-
-		for i, chain in ipairs(self.chains) do
-			local id = i - 1
-			-- use previous value for rolling average
-			for _, mhs in pairs(chain.mhs) do
-				mhs:add(chain.mhs_cur, current_time)
-			end
-			-- copy current chain values to the sample
-			self.copy_chain2sample(chain, sample, id)
-		end
-
-		self.history:append(sample)
-		last_time = current_time
-	end
-end
-
-function Monitor:add_zero_sample()
-	local current_time = get_uptime()
-	local sample = {}
-
-	sample.time = current_time
-	sample.chains = {}
-
-	for i, chain in ipairs(self.chains) do
-		local id = i - 1
-
-		chain.temp = 0
-		chain.errs_last = 0
-		chain.accepted = 0
-		chain.rejected = 0
-		chain.mhs_cur = 0
-		chain.mhs_nom = 0
-		chain.mhs_max = 0
-
-		for _, mhs in pairs(chain.mhs) do
-			mhs:add(chain.mhs_cur, current_time)
-		end
-		-- copy current chain values to the sample
-		self.copy_chain2sample(chain, sample, id)
-	end
-	self.history:append(sample)
-	self.last_time = current_time
-end
-
-function Monitor:add_sample(response)
-	local devs = CGMinerDevs.new(response)
-	local sample = {}
-	local current_time = get_uptime()
-	local time_diff = math.abs(current_time - self.last_time)
-
-	if (self.last_time > 0) and (time_diff > SAMPLE_TIME) then
-		-- interpolate missing samples
-		local missing_samples = math.floor((time_diff - 1) / SAMPLE_TIME)
-		missing_samples = math.min(missing_samples, HISTORY_SIZE)
-		self:interpolate(missing_samples)
-	end
-
-	sample.time = current_time
-	sample.chains = {}
-
-	for i, chain in ipairs(self.chains) do
-		local id = i - 1
-		local dev = devs:get(id)
-		if dev then
-			local errs = dev["Hardware Errors"]
-			chain.temp = dev["TempAVG"]
-			chain.errs = chain.errs + errs - chain.errs_last
-			chain.errs_last = errs
-			chain.accepted = dev["Accepted"]
-			chain.rejected = dev["Rejected"]
-			chain.mhs_cur = dev["MHS 5s"]
-			chain.mhs_nom = dev["nominal MHS"] or 0
-			chain.mhs_max = dev["maximal MHS"] or 0
-		else
-			chain.temp = 0
-			chain.errs_last = 0
-			chain.accepted = 0
-			chain.rejected = 0
-			chain.mhs_cur = 0
-			chain.mhs_nom = 0
-			chain.mhs_max = 0
-		end
-		for _, mhs in pairs(chain.mhs) do
-			mhs:add(chain.mhs_cur, current_time)
-		end
-		-- copy current chain values to the sample
-		self.copy_chain2sample(chain, sample, id)
-	end
-	self.history:append(sample)
-	self.last_time = current_time
-end
-
--- check if all chains are at least at 80% of nominal rate
-function Monitor:check_healthy()
-	local dead = true
-	for i, chain in ipairs(self.chains) do
+-- check if miner is running
+function Monitor:check_healthy(status)
+	local active_chains = 0
+	local active_pools = 0
+	local sick_chains = 0
+	for i, chain in ipairs(status.chains) do
 		if chain.mhs_nom > 0 then
-			--log("chain %d health %f", i, chain.mhs_cur/chain.mhs_nom*100)
-			dead = false
-			if chain.mhs_cur < chain.mhs_nom*0.8 then
-				return 'sick'
+			--log("chain %d health %f", i, chain.mhs_cur/chain.mhs_nom * 100)
+			active_chains = active_chains + 1
+			if chain.mhs_cur < chain.mhs_nom * MINIMAL_RATE / 100 then
+				sick_chains = sick_chains + 1
 			end
 		end
 	end
-	if dead then
-		return 'dead'
-	else
-		return 'ok'
-	end
-end
-
-function Monitor:get_response()
-	if self.history.size then
-		local result = {}
-		for sample in self.history:values() do
-			table.insert(result, sample)
+	for i, pool in ipairs(status.pools) do
+		if pool.Status == 'Alive' then
+			active_pools = active_pools + 1
 		end
-		return CJSON.encode(result)
 	end
+	--log("alive_pools=%d alive_chains=%d sick_chains=%d",
+		--active_pools, active_chains, sick_chains)
+	if active_pools == 0 then
+		return 'dead', 'no active pools'
+	end
+	if active_chains == 0 then
+		return 'dead', 'no active chains'
+	end
+	if sick_chains > 0 then
+		return 'sick', 'low hashrate'
+	end
+	return 'ok'
 end
 
 local state_to_red_led = {
@@ -367,8 +215,8 @@ local state_to_red_led = {
 	ok = 'off',
 }
 local state_to_green_led = {
-	dead = 'on',
-	sick = 'on',
+	dead = 'off',
+	sick = 'off',
 	ok = 'blink-slooow',
 }
 
@@ -413,19 +261,23 @@ function Monitor:safety_turn_all_fans_on()
 	end
 end
 
-function Monitor:set_state(state)
+function Monitor:set_state(state, reason)
 	if state == 'dead' then
 		self:safety_turn_all_fans_on()
 	end
 	if state ~= self.state then
-		log('state %s', state)
+		if reason then
+			log('state %s because %s', state, reason)
+		else
+			log('state %s', state)
+		end
 		self.state = state
 		self:update_leds()
 	end
 end
 
 local model = get_miner_model()
-local monitor = Monitor.new(HISTORY_SIZE, Led.new(RED_LED_PATH), Led.new(GREEN_LED_PATH), model)
+local monitor = Monitor.new(Led.new(RED_LED_PATH), Led.new(GREEN_LED_PATH), model)
 local server = assert(SOCKET.bind(SERVER_HOST, SERVER_PORT))
 
 -- server accept is interrupted every second to get new sample from cgminer
@@ -440,33 +292,31 @@ while true do
 
 	if monitor:sample_time() then
 		local cgminer = assert(SOCKET.tcp())
-		local new_state
-		local sample = nil
+		local result = nil
+		local new_state = 'dead'
+		local reason = "cgminer API doesn't respond"
 		cgminer:settimeout(3)
 		local ret, err = cgminer:connect(CGMINER_HOST, CGMINER_PORT)
 		if ret then
-			cgminer:send('{ "command":"devs" }')
+			cgminer:send('{ "command":"devs+pools" }')
 			-- read all data and close the connection
-			local result = cgminer:receive('*a')
-			if result then
+			local str = cgminer:receive('*a')
+			if str then
 				-- remove null from string
-				sample = result:sub(1, -2)
+				result = str:sub(1, -2)
 			end
 		end
-		if sample then
-			-- check if miner is running ok
-			monitor:add_sample(sample)
-		else
-			monitor:add_zero_sample()
+		if result then
+			local status = CGMinerStatus.new(result)
+			new_state, reason = monitor:check_healthy(status)
 		end
-		new_state = monitor:check_healthy()
-		monitor:set_state(new_state)
+		monitor:set_state(new_state, reason)
 	end
 	if client then
-		local response = monitor:get_response(history)
-		if response then
-			client:send(response)
-		end
+		--local response = monitor:get_response(history)
+		--if response then
+		--	client:send(response)
+		-- end
 		client:settimeout(1)
 		local ok, err = client:receive('*a')
 		if ok then

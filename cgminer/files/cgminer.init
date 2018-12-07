@@ -31,7 +31,7 @@ boot()
 	"pools" : [
 		{
 			"url" : "${pool_host:-stratum+tcp://stratum.slushpool.com}:${pool_port:-3333}",
-			"user" : "${pool_user:-braiinstest.worker1}",
+			"user" : "${pool_user:-!non-existent-user!}",
 			"pass" : "${pool_pass}"
 		}
 	],

@@ -1,3 +1,11 @@
+config FIRMWARE_MAJOR
+    string "Firmware major version"
+    default ""
+
 config FIRMWARE_VERSION
     string "Firmware version"
+    default ""
+
+config FIRMWARE_REQUIRE
+    string "Previous firmware version required by this firmware"
     default ""

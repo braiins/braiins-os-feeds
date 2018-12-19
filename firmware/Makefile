@@ -42,15 +42,64 @@ define Package/firmware/preinst
 # if run within buildroot exit
 [ -n "$${IPKG_INSTROOT}" ] && exit 0
 
+PACKAGES_NAME="Packages"
+PACKAGES_PATH="/tmp/$${PACKAGES_NAME}"
+SYSUPGRADE_PATH="/tmp/sysupgrade.tar"
 MINER_FEEDS="$(MINER_FEEDS_CONFIG)"
 FIRMWARE_NAME="$(PKG_NAME)_$(VERSION)_$(PKGARCH).tar"
+FIRMWARE_REQUIRE="$(call qstrip,$(CONFIG_FIRMWARE_REQUIRE))"
 
 # parse server address from opkg configuration file
 feeds_server=$$(awk '/miner_firmware/ {print $$3}' "$${MINER_FEEDS}")
 
-echo "Running system upgrade..."
-wget -O "/tmp/sysupgrade.tar" "$${feeds_server}/$${FIRMWARE_NAME}" || exit 1
-sysupgrade "/tmp/sysupgrade.tar" || exit 1
+current_fw_version() {
+	if ! cat /etc/bos_version 2>/dev/null; then
+		awk '/Package: /{p=$$2} /Version: /{v=$$2} \
+			 /Status: /{if (p == "firmware" && $$NF == "installed") print v}' \
+			'/usr/lib/opkg/status'
+	fi
+}
+
+required_fw_version() {
+	result=$$(awk '/Package: /{p=$$2} /Version: /{v=$$2} /Require: /{r=$$2} \
+		/Filename: /{if (p == "firmware" && v == "'$$2'") print $$2" "r}' "$$1")
+	eval $$3=$${result% *}
+	eval $$4=$${result#* }
+}
+
+get_firmware_name() {
+	local fw_version=$$(current_fw_version)
+	local require=$${FIRMWARE_REQUIRE}
+	local filename=$${FIRMWARE_NAME}
+	if [ ! "$${fw_version}" "<" "$${require}" ]; then
+		eval $$1=$${filename}
+		return 0
+	fi
+
+	echo "Downloading package list..."
+	wget -O "$${PACKAGES_PATH}.gz" "$${feeds_server}/$${PACKAGES_NAME}.gz" || return 1
+	gzip -df "$${PACKAGES_PATH}.gz" || return 1
+	wget -O "$${PACKAGES_PATH}.sig" "$${feeds_server}/$${PACKAGES_NAME}.sig" || return 1
+	echo "Checking signature..."
+	usign -V -m "$${PACKAGES_PATH}" -P "/etc/opkg/keys" || return 1
+
+	while [ "$${fw_version}" "<" "$${require}" ]; do
+		required_fw_version "$${PACKAGES_PATH}" $${require} filename require
+		[ -n "$${filename}" ] || return 1
+	done
+	echo "Using previous firmware to satisfy requirements!"
+	eval $$1="$${filename%.ipk}.tar"
+}
+
+if get_firmware_name firmware_name; then
+	echo "Running system upgrade..."
+	wget -O "$${SYSUPGRADE_PATH}" "$${feeds_server}/$${firmware_name}"
+	sysupgrade "$${SYSUPGRADE_PATH}"
+else
+	echo "Firmware version '$${FIRMWARE_REQUIRE}' is required before upgrading to this version."
+	echo "Cannot find required firmware on server!"
+	exit 1
+fi
 
 # the package is not actually installed
 # wait to suppress error printing

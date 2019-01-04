@@ -7,8 +7,8 @@ PKG_MAINTAINER:=Libor Vasicek <libor.vasicek@braiins.cz>
 # set firmware version
 PKG_RELEASE:=$(call qstrip,$(CONFIG_FIRMWARE_VERSION))
 
-MINER_FEEDS_SERVER:=https://feeds.braiins-os.org/$(SUBTARGET)
-MINER_FEEDS_CONFIG:=/etc/opkg/minerfeeds.conf
+BOS_FEEDS_SERVER:=https://feeds.braiins-os.org/$(SUBTARGET)
+BOS_FEEDS_CONFIG:=/etc/opkg/bosfeeds.conf
 
 include $(INCLUDE_DIR)/package.mk
 
@@ -33,7 +33,7 @@ define Package/firmware/install
 	$(INSTALL_DIR) $(1)/etc
 	$(INSTALL_CONF) ./files/fw_info.json $(1)/etc/
 	$(INSTALL_DIR) $(1)/etc/opkg
-	echo "src/gz miner_firmware $(MINER_FEEDS_SERVER)" > $(1)$(MINER_FEEDS_CONFIG)
+	echo "src/gz bos_firmware $(BOS_FEEDS_SERVER)" > $(1)$(BOS_FEEDS_CONFIG)
 endef
 
 define Package/firmware/preinst
@@ -45,12 +45,12 @@ define Package/firmware/preinst
 PACKAGES_NAME="Packages"
 PACKAGES_PATH="/tmp/$${PACKAGES_NAME}"
 SYSUPGRADE_PATH="/tmp/sysupgrade.tar"
-MINER_FEEDS="$(MINER_FEEDS_CONFIG)"
+BOS_FEEDS="$(BOS_FEEDS_CONFIG)"
 FIRMWARE_NAME="$(PKG_NAME)_$(VERSION)_$(PKGARCH).tar"
 FIRMWARE_REQUIRE="$(call qstrip,$(CONFIG_FIRMWARE_REQUIRE))"
 
 # parse server address from opkg configuration file
-feeds_server=$$(awk '/miner_firmware/ {print $$3}' "$${MINER_FEEDS}")
+feeds_server=$$(awk '/bos_firmware/ {print $$3}' "$${BOS_FEEDS}")
 
 current_fw_version() {
 	if ! cat /etc/bos_version 2>/dev/null; then

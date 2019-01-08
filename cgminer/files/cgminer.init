@@ -9,14 +9,26 @@ CONF=/etc/cgminer.conf
 boot()
 {
 	if [ ! -f "$CONF" ]; then
-		# get default pool configuration from U-Boot env
-		local pool_host=$(fw_printenv -n miner_pool_host 2>/dev/null)
-		local pool_port=$(fw_printenv -n miner_pool_port 2>/dev/null)
-		local pool_user=$(fw_printenv -n miner_pool_user 2>/dev/null)
-		local pool_pass=$(fw_printenv -n miner_pool_pass 2>/dev/null)
-		local miner_freq=$(fw_printenv -n miner_freq 2>/dev/null)
-		local miner_voltage=$(fw_printenv -n miner_voltage 2>/dev/null)
-		local miner_fixed_freq=$(fw_printenv -n miner_fixed_freq 2>/dev/null)
+		local bos_mode=$(cat /etc/bos_mode)
+		local pool_host=""
+		local pool_port=""
+		local pool_user=""
+		local pool_pass=""
+		local miner_freq=""
+		local miner_voltage=""
+		local miner_fixed_freq=""
+		local miner_freq_line=""
+
+		if [ "$bos_mode" == "nand" ]; then
+			# if NAND is available, get default pool configuration from U-Boot env
+			pool_host=$(fw_printenv -n miner_pool_host 2>/dev/null)
+			pool_port=$(fw_printenv -n miner_pool_port 2>/dev/null)
+			pool_user=$(fw_printenv -n miner_pool_user 2>/dev/null)
+			pool_pass=$(fw_printenv -n miner_pool_pass 2>/dev/null)
+			miner_freq=$(fw_printenv -n miner_freq 2>/dev/null)
+			miner_voltage=$(fw_printenv -n miner_voltage 2>/dev/null)
+			miner_fixed_freq=$(fw_printenv -n miner_fixed_freq 2>/dev/null)
+		fi
 
 		# applies only to AM1
 		if [ "$miner_fixed_freq" == "true" ]; then

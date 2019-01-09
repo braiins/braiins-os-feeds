@@ -1,0 +1,66 @@
+#!/bin/sh /etc/rc.common
+
+START=46
+start() {
+	. /lib/zynq.sh
+	case $(zynq_board_name) in
+		dm1-g9|\
+		dm1-g19|\
+		am1-s9)
+			# update environment when it is not corrupted
+			test -z "$(fw_printenv 2>&1 >/dev/null)" && update_env
+			;;
+	esac
+}
+
+STAGE3_DIR="./upgrade"
+STAGE3_SCRIPT="./stage3.sh"
+STAGE3_OFFSET=0x0100000
+STAGE3_MTD=/dev/mtd8
+
+update_env() {
+	# redirect STDOUT and STDERR to /dev/kmsg
+	exec 1<&- 2<&- 1>/dev/kmsg 2>&1
+
+	echo "Start post-upgrade process..."
+
+	set -e
+	local first_boot=$(fw_printenv -n first_boot 2>/dev/null)
+
+	if [ x"$first_boot" == x"yes" ]; then
+		local stage3_size=0x$(nanddump -ql 4 ${STAGE3_MTD} | hexdump -v -n 4 -e '1/1 "%02x"')
+		if [ $stage3_size != 0xffffffff ]; then
+			echo "Running stage3 post-upgrade script..."
+
+			cd "/tmp"
+			# extract tarball from NAND to stage3 dir
+			nanddump -s ${STAGE3_OFFSET} -l ${stage3_size} ${STAGE3_MTD} | tar zx
+			cd "$STAGE3_DIR"
+
+			# rather check error in script
+			set +e
+
+			if /bin/sh "$STAGE3_SCRIPT" ; then
+				echo "Post-upgrade stage3 has been successful!"
+			else
+				echo "Post-upgrade stage3 failed"
+			fi
+
+			# remove stage3 partition after upgrade
+			mtd erase firmware2
+		fi
+	fi
+
+	fw_setenv --script - <<-EOF
+		# after successful upgrade delete environment variable 'upgrade_stage'
+		# to suppress U-Boot auto-recovery process
+		upgrade_stage
+		#
+		# after successful factory reset delete environment variable 'first_boot'
+		# to allow booting from SD card; it prevents recursive factory reset when
+		# SD card is still inserted in the slot
+		first_boot
+		sd_boot
+		sd_images
+	EOF
+}

@@ -4,7 +4,8 @@
 exec 1<&- 2<&- 1>/dev/kmsg 2>&1
 
 RECOVERY_MTD=/dev/mtd6
-FIMRWARE_MTD=/dev/mtd7
+FIMRWARE1_MTD=/dev/mtd7
+FIMRWARE2_MTD=/dev/mtd8
 
 FACTORY_OFFSET=0x800000
 FACTORY_SIZE=0xC00000
@@ -93,11 +94,14 @@ if [ x${FACTORY_RESET} == x"yes" ]; then
 	mtd_write "$SYSTEM_BIT_PATH" fpga1
 	mtd_write "$SYSTEM_BIT_PATH" fpga2
 
-	# erase all firmware partition
-	mtd erase firmware1
-	mtd erase firmware2
+	firmware2_magic=$(nanddump -ql 4 ${FIMRWARE2_MTD} | hexdump -v -n 4 -e '1/1 "%02x"')
 
-	ubiformat ${FIMRWARE_MTD} -f "$FACTORY_BIN_PATH"
+	# erase firmware partitions
+	mtd erase firmware1
+	# firmware2 partition may contain stage3 tarball (erase only partition with UBI# magic)
+	[ "$firmware2_magic" == "55424923" ] && mtd erase firmware2
+
+	ubiformat ${FIMRWARE1_MTD} -f "$FACTORY_BIN_PATH"
 
 	# remove factory reset mode from U-Boot env
 	fw_setenv factory_reset

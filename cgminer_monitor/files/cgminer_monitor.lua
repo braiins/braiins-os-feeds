@@ -254,7 +254,9 @@ end
 -- initialization as a method
 function Monitor:safety_turn_all_fans_on()
 	if self.model ~= 'am1-s9' then
-		log('turning all fans on')
+		if self.state ~= 'dead' then
+			log('turning all fans on')
+		end
 		for i = 0, 2 do
 			fan_set_duty(i, 100)
 		end

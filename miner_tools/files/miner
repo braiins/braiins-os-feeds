@@ -46,6 +46,7 @@ run_recovery() {
 		net_dns_servers=$(uci get network.lan.dns 2>/dev/null | tr " " ,)
 	fi
 	net_hostname=$(uci get network.lan.hostname 2>/dev/null)
+	[ -n "$net_hostname" ] || net_hostname=$(cat /proc/sys/kernel/hostname 2>/dev/null)
 	recovery_mtdparts=$(fw_printenv -n recovery_mtdparts 2>/dev/null)
 	if [ -n "$recovery_mtdparts" ]; then
 		# append overlapping partition with bOS U-Boot environment

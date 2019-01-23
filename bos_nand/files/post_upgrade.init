@@ -29,7 +29,11 @@ update_env() {
 
 	if [ x"$first_boot" == x"yes" ]; then
 		local stage3_size=0x$(nanddump -ql 4 ${STAGE3_MTD} | hexdump -v -n 4 -e '1/1 "%02x"')
-		if [ $stage3_size != 0xffffffff ]; then
+		# first 4 bytes in firmware2 partition may contain:
+		# * 0xffffffff - erased during factory upgrade when there is no stage3 script
+		# * 0x55424923 - UBI# magic that signals standard system upgrade
+		# * 0x???????? - size of tarball with stage3 script which will be run after factory upgrade
+		if [ $stage3_size != 0xffffffff -a $stage3_size != 0x55424923 ]; then
 			echo "Running stage3 post-upgrade script..."
 
 			cd "/tmp"

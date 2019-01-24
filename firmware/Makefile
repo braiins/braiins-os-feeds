@@ -46,11 +46,28 @@ PACKAGES_NAME="Packages"
 PACKAGES_PATH="/tmp/$${PACKAGES_NAME}"
 SYSUPGRADE_PATH="/tmp/sysupgrade.tar"
 BOS_FEEDS="$(BOS_FEEDS_CONFIG)"
+BOS_FEEDS_RECORD="bos_firmware"
 FIRMWARE_NAME="$(PKG_NAME)_$(VERSION)_$(PKGARCH).tar"
 FIRMWARE_REQUIRE="$(call qstrip,$(CONFIG_FIRMWARE_REQUIRE))"
 
+if [ ! -f "$${BOS_FEEDS}" ]; then
+	# fallback for old miner firmwares
+	BOS_FEEDS="/etc/opkg/minerfeeds.conf"
+	BOS_FEEDS_RECORD="miner_firmware"
+fi
+if [ ! -f "$${BOS_FEEDS}" ]; then
+	echo "Missing configuration file $(BOS_FEEDS_CONFIG)!" >&2
+	exit 1
+fi
+
 # parse server address from opkg configuration file
-feeds_server=$$(awk '/bos_firmware/ {print $$3}' "$${BOS_FEEDS}")
+feeds_server=$$(awk '/'$${BOS_FEEDS_RECORD}'/ {print $$3}' "$${BOS_FEEDS}")
+
+if [ -z "$${feeds_server}" ]; then
+	echo "Cannot find feeds server in $${BOS_FEEDS}!" >&2
+	echo "Configuration with '$${BOS_FEEDS_RECORD}' is probably missing." >&2
+	exit 1
+fi
 
 current_fw_version() {
 	if ! cat /etc/bos_version 2>/dev/null; then
@@ -96,8 +113,8 @@ if get_firmware_name firmware_name; then
 	wget -O "$${SYSUPGRADE_PATH}" "$${feeds_server}/$${firmware_name}"
 	sysupgrade "$${SYSUPGRADE_PATH}"
 else
-	echo "Firmware version '$${FIRMWARE_REQUIRE}' is required before upgrading to this version."
-	echo "Cannot find required firmware on server!"
+	echo "Firmware version '$${FIRMWARE_REQUIRE}' is required before upgrading to this version." >&2
+	echo "Cannot find required firmware on server!" >&2
 	exit 1
 fi
 
